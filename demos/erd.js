@@ -5,6 +5,7 @@ const stage = new Konva.Stage({
     height: 600
 });
 
+
 const globalState = {
     isDrawingArrow: false,
 }
@@ -14,6 +15,9 @@ const layer = new Konva.Layer();
 
 // Store entities and relationships
 const entities = new Map();
+/**
+ * @type {Relationship[]}
+ */
 const relationships = [];
 
 let clickedEntity = null;
@@ -42,17 +46,35 @@ class Entity {
             width: 170,
             height: 50,
             fill: '#eee',
+            opacity: 0,
             x: -10,
             y: -10,
-            opacity: 0.0,
         });
 
         this.arrowBoarder.on('click', e => {
-            console.log('clicked on arrow boarder');
+            console.log('clicked on arrow boarder', globalState.isDrawingArrow);
+            if (globalState.isDrawingArrow) {
+                // this is linking to an existing entity
+                globalState.isDrawingArrow = false;
+                const pointer = stage.getPointerPosition();
+
+                const rel = relationships.at(-1);
+                rel.draw(
+                    rel.line.points()[0],
+                    rel.line.points()[1],
+                    this.xAfterSnap(pointer.x),
+                    this.yAfterSnap(pointer.y),
+                )
+                this.rels.add(rel);
+
+                return;
+            }
+
+            // this is a new relationship
             const pointer = stage.getPointerPosition();
             const x = this.xAfterSnap(pointer.x);
             const y = this.yAfterSnap(pointer.y);
-            this.addEdge(x, y, x, y);
+            this.createEdge(x, y, x, y);
             globalState.isDrawingArrow = true;
         });
 
@@ -62,7 +84,7 @@ class Entity {
 
         this.arrowBoarder.on('mouseover', () => {
             clickedEntity = this;
-            this.arrowBoarder.opacity(1)
+            this.arrowBoarder.opacity(0.5)
         });
         this.arrowBoarder.on('mouseout', () => {
             clickedEntity = null;
@@ -164,8 +186,28 @@ class Entity {
     }
 
     updateBox() {
+        const oldHeight = this.box.height();
         const height = 30 + (this.attributes.length * 25);
+        const heightDelta = height - oldHeight;
         this.box.height(height);
+        this.rels.forEach(rel => {
+            if (this.ownsRelationship(rel)) {
+                rel.line.points([
+                    rel.line.points()[0],
+                    rel.line.points()[1] + heightDelta,
+                    rel.line.points()[2],
+                    rel.line.points()[3],
+                ])
+            } else {
+                rel.line.points([
+                    rel.line.points()[0],
+                    rel.line.points()[1],
+                    rel.line.points()[2],
+                    rel.line.points()[3] + heightDelta,
+                ])
+
+            }
+        })
         this.arrowBoarder.height(height + 20);
         this.nameText.y(0);
 
@@ -198,7 +240,7 @@ class Entity {
         layer.batchDraw();
     }
 
-    addEdge(fromX, fromY, toX, toY) {
+    createEdge(fromX, fromY, toX, toY) {
         const relationship = new Relationship(this);
         this.rels.add(relationship);
         relationship.draw(fromX, fromY, toX, toY);
@@ -211,14 +253,22 @@ class Entity {
     #updateEdges(delta) {
         console.log('updateEdges');
         this.rels.forEach(rel => {
-            rel.draw(
-                rel.line.points()[0] + delta.x,    // from x
-                rel.line.points()[1] + delta.y,    // from y
-                rel.line.points()[2],    // to x
-                rel.line.points()[3],
-            )
+            if (rel.fromEntity === this) {
+                rel.draw(
+                    rel.line.points()[0] + delta.x,
+                    rel.line.points()[1] + delta.y,
+                    rel.line.points()[2],
+                    rel.line.points()[3],
+                )
+            } else {
+                rel.draw(
+                    rel.line.points()[0],
+                    rel.line.points()[1],
+                    rel.line.points()[2] + delta.x,
+                    rel.line.points()[3] + delta.y,
+                )
+            }
         });
-
 
         layer.batchDraw();
 
@@ -277,6 +327,13 @@ class Entity {
         }
         return pointerY
     }
+
+    /**
+     * @param {Relationship} rel
+     */
+    ownsRelationship(rel) {
+        return this.rels.has(rel) && rel.fromEntity === this;
+    }
 }
 
 // Relationship class
@@ -293,8 +350,6 @@ class Relationship {
         });
 
         layer.add(this.line);
-        // this.update();
-
         relationships.push(this);
     }
 
@@ -303,11 +358,6 @@ class Relationship {
         layer.batchDraw();
     }
 
-}
-
-// Function to update all relationships
-function updateRelationships() {
-    relationships.forEach(rel => rel.update());
 }
 
 // Add entity button
@@ -328,6 +378,14 @@ const plusText = new Konva.Text({
     fill: '#fff'
 });
 
+const bg = new Konva.Rect({
+    width: stage.width(),
+    height: stage.height(),
+    fill: 'yellow',
+    opacity: 0.5,
+});
+
+layer.add(bg);
 layer.add(addEntityBtn);
 layer.add(plusText);
 
@@ -348,8 +406,8 @@ addEntityBtn.on('click', () => {
 });
 
 
-stage.on('mousedown', () => {
-    console.log('clicked on stage');
+bg.on('click', () => {
+    console.log('bg: clicked');
     if (globalState.isDrawingArrow) {
         globalState.isDrawingArrow = false;
     }
@@ -357,24 +415,6 @@ stage.on('mousedown', () => {
 
 stage.on('mousemove', (e) => {
     console.log('mousemove', globalState.isDrawingArrow);
-    // console.log('mousemove', isDrawing, startEntity);
-    // if (isDrawing && startEntity) {
-    //     const pos = stage.getPointerPosition();
-    //     const endEntity = Array.from(entities.values()).find(entity => {
-    //         const box = entity.group.getClientRect();
-    //         return pos.x >= box.x && pos.x <= box.x + box.width &&
-    //             pos.y >= box.y && pos.y <= box.y + box.height;
-    //     });
-
-    //     if (endEntity && endEntity !== startEntity) {
-    //         const relationship = new Relationship(startEntity, endEntity);
-    //         relationships.push(relationship);
-    //         isDrawing = false;
-    //         startEntity = null;
-    //         layer.batchDraw();
-    //     }
-    // }
-
     if (globalState.isDrawingArrow) {
         console.log('drawing arrow');
         const pos = stage.getPointerPosition();
@@ -382,8 +422,8 @@ stage.on('mousemove', (e) => {
         rel.draw(
             rel.line.points()[0],
             rel.line.points()[1],
-            pos.x,
-            pos.y
+            pos.x + 15,
+            pos.y + 15,
         )
     }
 });
