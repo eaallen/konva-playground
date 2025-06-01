@@ -343,6 +343,8 @@ class Relationship {
         this.toEntity = toEntity;
         this.id = Date.now();
 
+        this.group = new Konva.Group({});
+
         this.line = new Konva.Line({
             points: [],
             stroke: '#000',
@@ -357,6 +359,10 @@ class Relationship {
         this.line.points([fromX, fromY, toX, toY]);
         layer.batchDraw();
     }
+
+
+
+
 
 }
 
@@ -422,8 +428,8 @@ stage.on('mousemove', (e) => {
         rel.draw(
             rel.line.points()[0],
             rel.line.points()[1],
-            pos.x + 15,
-            pos.y + 15,
+            pos.x,
+            pos.y,
         )
     }
 });
