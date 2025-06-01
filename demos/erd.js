@@ -16,10 +16,14 @@ let clickedEntity = null;
 
 // Entity class
 class Entity {
+    state = {
+        lastPos: null
+    }
     constructor(x, y) {
         this.id = Date.now();
         this.name = 'Entity';
         this.attributes = [];
+        this.edges = [];
         this.group = new Konva.Group({
             x,
             y,
@@ -35,10 +39,12 @@ class Entity {
             opacity: 0.0,
         });
 
-        this.arrowBoarder.on('click', () => {
+        this.arrowBoarder.on('click', e => {
             console.log('clicked on arrow boarder');
+            const pointer = stage.getPointerPosition();
+            this.addEdge(this.xAfterSnap(pointer.x), this.yAfterSnap(pointer.y));
         });
-        
+
         this.arrowBoarder.on('mouseover', () => {
             clickedEntity = this;
             this.arrowBoarder.opacity(1)
@@ -75,20 +81,39 @@ class Entity {
             }
         });
 
-       
+
         // Add to group
         this.group.add(this.arrowBoarder);
         this.group.add(this.box);
         this.group.add(this.nameText);
 
-        
+
         // Add to layer
         layer.add(this.group);
-        
+
+
+
         // Add event listeners
+        this.group.on('dragstart', () => {
+            // Store the initial position when dragging starts
+            this.state.lastPos = { x: this.group.x(), y: this.group.y() };
+        });
         this.group.on('dragmove', () => {
             updateRelationships();
+            if (this.state.lastPos && this.edges.length > 0) {
+                const currentPos = { x: this.group.x(), y: this.group.y() };
+                const delta = {
+                    x: currentPos.x - this.state.lastPos.x,
+                    y: currentPos.y - this.state.lastPos.y
+                };
+                this.#updateEdges(delta);
+            }
+
+            this.state.lastPos = { x: this.group.x(), y: this.group.y() };
             layer.batchDraw();
+        });
+        this.group.on('dragend', () => {
+            this.state.lastPos = null;
         });
 
         // Add attribute button
@@ -156,6 +181,103 @@ class Entity {
         });
 
         layer.batchDraw();
+    }
+
+    addEdge(fromX, fromY) {
+        const edge = new Konva.Arrow({
+            points: [
+                fromX,    // from x
+                fromY,    // from y
+                100,    // to x
+                100,    // to y
+            ],
+            pointerLength: 6,
+            pointerWidth: 6,
+            fill: 'black',
+            stroke: 'black',
+            strokeWidth: 2
+        });
+        console.log('edge', edge);
+
+        this.edges.push(edge);
+        console.log('this.edges', this.edges);
+        layer.add(edge);
+        console.log('layer', layer);
+        layer.batchDraw();
+        console.log('layer.batchDraw');
+    }
+
+
+    /**
+     * @param {{x: number, y: number}} delta
+     */
+    #updateEdges(delta) {
+        console.log('updateEdges', this.edges[0].points()[0], delta.x);
+        this.edges.forEach(edge => {
+            edge.points([
+                edge.points()[0] + delta.x,    // from x
+                edge.points()[1] + delta.y,    // from y
+                edge.points()[2],    // to x
+                edge.points()[3],    // to y
+            ]);
+        });
+        layer.batchDraw();
+    }
+
+    centerCoordinates() {
+        console.log('width', this.box.width());
+        console.log('height', this.box.height());
+
+        return {
+            x: this.group.x() + this.box.width() / 2,
+            y: this.group.y() + this.box.height() / 2
+        }
+    }
+
+    /**
+     * returns the bottom-right coordinates of the entity
+     */
+    get bottomCoordinates() {
+        return {
+            x: this.group.x() + this.box.width(),
+            y: this.group.y() + this.box.height()
+        }
+    }
+
+    xShouldSnapLeft(pointerX) {
+        return pointerX < this.group.x()
+    }
+
+    xShouldSnapRight(pointerX) {
+        return pointerX > this.bottomCoordinates.x
+    }
+
+    yShouldSnapTop(pointerY) {
+        return pointerY < this.group.y()
+    }
+
+    yShouldSnapBottom(pointerY) {
+        return pointerY > this.bottomCoordinates.y
+    }
+
+    xAfterSnap(pointerX) {
+        if(this.xShouldSnapLeft(pointerX)){
+            return this.group.x()
+        }
+        if(this.xShouldSnapRight(pointerX)){
+            return this.bottomCoordinates.x
+        }
+        return pointerX
+    }
+
+    yAfterSnap(pointerY) {
+        if(this.yShouldSnapTop(pointerY)){
+            return this.group.y()
+        }
+        if(this.yShouldSnapBottom(pointerY)){
+            return this.bottomCoordinates.y
+        }
+        return pointerY
     }
 }
 
