@@ -1,9 +1,13 @@
-// Create a stage
+
 const stage = new Konva.Stage({
     container: 'container',
     width: 800,
     height: 600
 });
+
+const globalState = {
+    isDrawingArrow: false,
+}
 
 // Create a layer
 const layer = new Konva.Layer();
@@ -19,11 +23,15 @@ class Entity {
     state = {
         lastPos: null
     }
+
+    /**
+     * @type {Set<Relationship>}
+     */
+    rels = new Set();
     constructor(x, y) {
         this.id = Date.now();
         this.name = 'Entity';
         this.attributes = [];
-        this.edges = [];
         this.group = new Konva.Group({
             x,
             y,
@@ -42,7 +50,14 @@ class Entity {
         this.arrowBoarder.on('click', e => {
             console.log('clicked on arrow boarder');
             const pointer = stage.getPointerPosition();
-            this.addEdge(this.xAfterSnap(pointer.x), this.yAfterSnap(pointer.y));
+            const x = this.xAfterSnap(pointer.x);
+            const y = this.yAfterSnap(pointer.y);
+            this.addEdge(x, y, x, y);
+            globalState.isDrawingArrow = true;
+        });
+
+        this.arrowBoarder.on('mouseup', e => {
+            console.log('mouseup on arrow boarder', this.arrowBoarder.getStage().getPointerPosition());
         });
 
         this.arrowBoarder.on('mouseover', () => {
@@ -99,8 +114,8 @@ class Entity {
             this.state.lastPos = { x: this.group.x(), y: this.group.y() };
         });
         this.group.on('dragmove', () => {
-            updateRelationships();
-            if (this.state.lastPos && this.edges.length > 0) {
+            // updateRelationships();
+            if (this.state.lastPos && this.rels.size > 0) {
                 const currentPos = { x: this.group.x(), y: this.group.y() };
                 const delta = {
                     x: currentPos.x - this.state.lastPos.x,
@@ -183,28 +198,10 @@ class Entity {
         layer.batchDraw();
     }
 
-    addEdge(fromX, fromY) {
-        const edge = new Konva.Arrow({
-            points: [
-                fromX,    // from x
-                fromY,    // from y
-                100,    // to x
-                100,    // to y
-            ],
-            pointerLength: 6,
-            pointerWidth: 6,
-            fill: 'black',
-            stroke: 'black',
-            strokeWidth: 2
-        });
-        console.log('edge', edge);
-
-        this.edges.push(edge);
-        console.log('this.edges', this.edges);
-        layer.add(edge);
-        console.log('layer', layer);
-        layer.batchDraw();
-        console.log('layer.batchDraw');
+    addEdge(fromX, fromY, toX, toY) {
+        const relationship = new Relationship(this);
+        this.rels.add(relationship);
+        relationship.draw(fromX, fromY, toX, toY);
     }
 
 
@@ -212,22 +209,23 @@ class Entity {
      * @param {{x: number, y: number}} delta
      */
     #updateEdges(delta) {
-        console.log('updateEdges', this.edges[0].points()[0], delta.x);
-        this.edges.forEach(edge => {
-            edge.points([
-                edge.points()[0] + delta.x,    // from x
-                edge.points()[1] + delta.y,    // from y
-                edge.points()[2],    // to x
-                edge.points()[3],    // to y
-            ]);
+        console.log('updateEdges');
+        this.rels.forEach(rel => {
+            rel.draw(
+                rel.line.points()[0] + delta.x,    // from x
+                rel.line.points()[1] + delta.y,    // from y
+                rel.line.points()[2],    // to x
+                rel.line.points()[3],
+            )
         });
+
+
         layer.batchDraw();
+
+
     }
 
-    centerCoordinates() {
-        console.log('width', this.box.width());
-        console.log('height', this.box.height());
-
+    get centerCoordinates() {
         return {
             x: this.group.x() + this.box.width() / 2,
             y: this.group.y() + this.box.height() / 2
@@ -261,20 +259,20 @@ class Entity {
     }
 
     xAfterSnap(pointerX) {
-        if(this.xShouldSnapLeft(pointerX)){
+        if (this.xShouldSnapLeft(pointerX)) {
             return this.group.x()
         }
-        if(this.xShouldSnapRight(pointerX)){
+        if (this.xShouldSnapRight(pointerX)) {
             return this.bottomCoordinates.x
         }
         return pointerX
     }
 
     yAfterSnap(pointerY) {
-        if(this.yShouldSnapTop(pointerY)){
+        if (this.yShouldSnapTop(pointerY)) {
             return this.group.y()
         }
-        if(this.yShouldSnapBottom(pointerY)){
+        if (this.yShouldSnapBottom(pointerY)) {
             return this.bottomCoordinates.y
         }
         return pointerY
@@ -286,28 +284,25 @@ class Relationship {
     constructor(fromEntity, toEntity) {
         this.fromEntity = fromEntity;
         this.toEntity = toEntity;
+        this.id = Date.now();
+
         this.line = new Konva.Line({
-            points: this.calculatePoints(),
+            points: [],
             stroke: '#000',
             strokeWidth: 2
         });
 
         layer.add(this.line);
-        this.update();
+        // this.update();
+
+        relationships.push(this);
     }
 
-    calculatePoints() {
-        const from = this.fromEntity.group;
-        const to = this.toEntity.group;
-        return [
-            from.x() + 75, from.y() + 15,
-            to.x() + 75, to.y() + 15
-        ];
+    draw(fromX, fromY, toX, toY) {
+        this.line.points([fromX, fromY, toX, toY]);
+        layer.batchDraw();
     }
 
-    update() {
-        this.line.points(this.calculatePoints());
-    }
 }
 
 // Function to update all relationships
@@ -352,32 +347,44 @@ addEntityBtn.on('click', () => {
     layer.batchDraw();
 });
 
-stage.on('mousedown', (e) => {
-    console.log('clicked on stage', clickedEntity);
-    if (clickedEntity) {
-        console.log('clicked on entity');
-        isDrawing = true;
-        startEntity = clickedEntity;
+
+stage.on('mousedown', () => {
+    console.log('clicked on stage');
+    if (globalState.isDrawingArrow) {
+        globalState.isDrawingArrow = false;
     }
-});
+})
 
 stage.on('mousemove', (e) => {
+    console.log('mousemove', globalState.isDrawingArrow);
     // console.log('mousemove', isDrawing, startEntity);
-    if (isDrawing && startEntity) {
-        const pos = stage.getPointerPosition();
-        const endEntity = Array.from(entities.values()).find(entity => {
-            const box = entity.group.getClientRect();
-            return pos.x >= box.x && pos.x <= box.x + box.width &&
-                pos.y >= box.y && pos.y <= box.y + box.height;
-        });
+    // if (isDrawing && startEntity) {
+    //     const pos = stage.getPointerPosition();
+    //     const endEntity = Array.from(entities.values()).find(entity => {
+    //         const box = entity.group.getClientRect();
+    //         return pos.x >= box.x && pos.x <= box.x + box.width &&
+    //             pos.y >= box.y && pos.y <= box.y + box.height;
+    //     });
 
-        if (endEntity && endEntity !== startEntity) {
-            const relationship = new Relationship(startEntity, endEntity);
-            relationships.push(relationship);
-            isDrawing = false;
-            startEntity = null;
-            layer.batchDraw();
-        }
+    //     if (endEntity && endEntity !== startEntity) {
+    //         const relationship = new Relationship(startEntity, endEntity);
+    //         relationships.push(relationship);
+    //         isDrawing = false;
+    //         startEntity = null;
+    //         layer.batchDraw();
+    //     }
+    // }
+
+    if (globalState.isDrawingArrow) {
+        console.log('drawing arrow');
+        const pos = stage.getPointerPosition();
+        const rel = relationships.at(-1);
+        rel.draw(
+            rel.line.points()[0],
+            rel.line.points()[1],
+            pos.x,
+            pos.y
+        )
     }
 });
 
