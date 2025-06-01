@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konva.js Examples</title>
+    <script src="https://unpkg.com/konva@9.2.3/konva.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #container {
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        .nav-menu {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .nav-menu a {
+            padding: 8px 16px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            background-color: #00D2FF;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .nav-menu a:hover {
+            background-color: #00b8e6;
+        }
+        .nav-menu a.active {
+            background-color: #FF6B6B;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-menu">
+        <a href="?demo=basic" id="basic-link">Basic Shapes</a>
+        <a href="?demo=advanced" id="advanced-link">Advanced Demo</a>
+        <a href="?demo=custom" id="custom-link">Custom Demo</a>
+        <a href="?demo=erd" id="erd-link">ERD Editor</a>
+    </div>
+    <div id="container"></div>
+    <script>
+        // Function to get URL parameters
+        function getUrlParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        // Function to load demo
+        function loadDemo(demoName) {
+            // Update active link
+            document.querySelectorAll('.nav-menu a').forEach(link => {
+                link.classList.remove('active');
+            });
+            document.getElementById(`${demoName}-link`).classList.add('active');
+
+            // Clear the container
+            document.getElementById('container').innerHTML = '';
+            
+            // Load the appropriate script
+            const script = document.createElement('script');
+            script.src = `demos/${demoName}.js`;
+            document.body.appendChild(script);
+        }
+
+        // Load demo based on URL parameter
+        const demoName = getUrlParam('demo') || 'basic';
+        loadDemo(demoName);
+    </script>
+</body>
+</html> 
