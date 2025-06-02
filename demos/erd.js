@@ -338,6 +338,7 @@ class Entity {
 
 // Relationship class
 class Relationship {
+    #STROKE_WIDTH = 3;
     constructor(fromEntity, toEntity) {
         this.fromEntity = fromEntity;
         this.toEntity = toEntity;
@@ -348,7 +349,34 @@ class Relationship {
         this.line = new Konva.Line({
             points: [],
             stroke: '#000',
-            strokeWidth: 2
+            strokeWidth: this.#STROKE_WIDTH
+        });
+
+        this.line.on('mouseover', () => {
+            if (globalState.isDrawingArrow) { return }
+
+            this.line.strokeWidth(this.#STROKE_WIDTH * 2);
+
+            // find the middle of the line
+            const points = this.line.points();
+            const middleX = (points[0] + points[2]) / 2;
+            const middleY = (points.at(-1) + points.at(-2)) / 2;
+
+            const arrow = new Konva.Line({
+                points: [middleX, middleY, middleX + 10, middleY - 10, middleX - 10, middleY - 10],
+                stroke: '#000',
+                strokeWidth: this.#STROKE_WIDTH
+            });
+            this.line.add(arrow);
+        });
+        this.line.on('mouseout', () => {
+            this.line.strokeWidth(this.#STROKE_WIDTH);
+        });
+        this.line.on('click', () => {
+            console.log('clicked on relationship');
+            if (globalState.isDrawingArrow) {
+                globalState.isDrawingArrow = false;
+            }
         });
 
         layer.add(this.line);
